@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:flutter/services.dart';
 
 class PokemonGridCard extends StatefulWidget {
   final String pokemon;

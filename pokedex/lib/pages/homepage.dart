@@ -2,9 +2,8 @@ import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:pokedex/pokemondata.dart';
 import 'package:http/http.dart' as http;
-import 'package:autocomplete_textfield/autocomplete_textfield.dart';
+import 'package:pokedex/pages/resultpage.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({
@@ -21,9 +20,11 @@ class _HomepageState extends State<Homepage> {
   List<int>? pokeId;
   TextEditingController _textEditingController = TextEditingController();
 
-  GlobalKey<AutoCompleteTextFieldState<String>> _key = GlobalKey();
-
   var _pokeChoose;
+
+  final _formkey = GlobalKey<FormState>();
+
+  List<String>? _similarpokelist;
 
   @override
   void initState() {
@@ -46,6 +47,28 @@ class _HomepageState extends State<Homepage> {
     }
   }
 
+  final String apiUrl = 'http://10.0.2.2:5000/api';
+
+  Future<List<String>?> findSimilarPokemon(String? name) async {
+    try {
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'name': name}),
+      );
+      if (response.statusCode == 200) {
+        Map<String, dynamic> _similarpokelist = json.decode(response.body);
+        return List<String>.from(_similarpokelist['pokelist'].map((x) => x));
+      } else {
+        throw Exception(
+            'Failed to load similar Pokemon. Status code: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error occurred while fetching similar Pokemon: $e');
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<dynamic>>(
@@ -66,58 +89,106 @@ class _HomepageState extends State<Homepage> {
           return GestureDetector(
             onTap: () => FocusScope.of(context).requestFocus(FocusNode()),
             child: Scaffold(
-              body: Column(
-                children: [
-                  SizedBox(
-                    height: 100,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(18.0),
-                    child: TextField(
-                      controller: _textEditingController,
-                      decoration: InputDecoration(
-                          contentPadding: EdgeInsets.all(20),
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(20)),
-                          labelText: 'Search for a Pokemon',
-                          floatingLabelBehavior: FloatingLabelBehavior.auto),
-                      onChanged: (value) {
-                        setState(() {
-                          _pokeChoose = null;
-                        });
-                      },
+              body: Form(
+                key: _formkey,
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 100,
                     ),
-                  ),
-                  ElevatedButton(onPressed: () {}, child: Text("Send")),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: pokemonDetails.length,
-                      itemBuilder: (BuildContext context, int index) {
-                        if (_textEditingController.text.isEmpty ||
-                            pokemonDetails[index].name.toLowerCase().contains(
-                                _textEditingController.text.toLowerCase())) {
-                          return ListTile(
-                            leading: CachedNetworkImage(
-                              imageUrl: pokemonDetails[index].imageUrl,
-                              height: 50,
-                              width: 50,
-                            ),
-                            title: Text(pokemonDetails[index].name),
-                            onTap: () {
-                              setState(() {
-                                _pokeChoose = pokemonDetails[index].id;
-                                _textEditingController.text =
-                                    pokemonDetails[index].name;
-                              });
-                            },
-                          );
-                        } else {
-                          return Container();
-                        }
-                      },
+                    Padding(
+                      padding: const EdgeInsets.all(18.0),
+                      child: TextFormField(
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter a Pokemon name';
+                          }
+                          return null;
+                        },
+                        controller: _textEditingController,
+                        decoration: InputDecoration(
+                            contentPadding: EdgeInsets.all(20),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20)),
+                            labelText: 'Search for a Pokemon',
+                            floatingLabelBehavior: FloatingLabelBehavior.auto),
+                        onChanged: (value) {
+                          setState(() {
+                            _pokeChoose = null;
+                          });
+                        },
+                      ),
                     ),
-                  ),
-                ],
+                    ElevatedButton(
+                        onPressed: () async {
+                          if (_formkey.currentState!.validate()) {
+                            findSimilarPokemon(_textEditingController.text);
+                            _similarpokelist = await findSimilarPokemon(
+                                _textEditingController.text);
+                            print(_similarpokelist);
+                          }
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (builder) => ResultPage(
+                                        pokelist: _similarpokelist,
+                                        images: images,
+                                        names: names,
+                                      )));
+                        },
+                        style: ButtonStyle(
+                            elevation: MaterialStatePropertyAll(4.0),
+                            backgroundColor:
+                                MaterialStatePropertyAll(Color(0xffc45c4b))),
+                        child: Text(
+                          "Send",
+                          style: TextStyle(
+                            fontSize: 20,
+                          ),
+                        )),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: pokemonDetails.length,
+                        itemBuilder: (BuildContext context, int index) {
+                          if (_textEditingController.text.isEmpty ||
+                              pokemonDetails[index].name.toLowerCase().contains(
+                                  _textEditingController.text.toLowerCase())) {
+                            return Card(
+                              color: Colors.grey[50],
+                              elevation: 4.0,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.all(Radius.circular(20))),
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: ListTile(
+                                  leading: CachedNetworkImage(
+                                    imageUrl: pokemonDetails[index].imageUrl,
+                                    height: 50,
+                                    width: 50,
+                                  ),
+                                  title: Text(pokemonDetails[index].name),
+                                  onTap: () {
+                                    setState(() {
+                                      _pokeChoose = pokemonDetails[index].id;
+                                      _textEditingController.text =
+                                          pokemonDetails[index].name;
+                                    });
+                                  },
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.all(
+                                          Radius.circular(20))),
+                                ),
+                              ),
+                            );
+                          } else {
+                            return Container();
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
